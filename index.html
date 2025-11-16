@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON ↔ TOON Converter</title>
+    <!-- Load Tailwind CSS from CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Simple scrollbar styling for webkit browsers */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background-color: #4b5563; /* gray-600 */
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background-color: #1f2937; /* gray-800 */
+        }
+        /* Focus ring styling */
+        textarea:focus {
+            outline: none;
+            border-color: #3b82f6; /* blue-500 */
+            box-shadow: 0 0 0 2px #1e40af; /* blue-800 */
+        }
+        /* Button hover/active states */
+        .btn {
+            @apply px-4 py-2 rounded-md font-semibold text-white shadow-md transition-all duration-150 ease-in-out;
+        }
+        .btn-primary {
+            @apply bg-blue-600 hover:bg-blue-700 active:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50;
+        }
+        .btn-secondary {
+            @apply bg-gray-600 hover:bg-gray-700 active:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50;
+        }
+        .btn-green {
+            @apply bg-green-600 hover:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 h-screen flex flex-col antialiased">
+
+    <!-- Header -->
+    <header class="bg-gray-800 shadow-md">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-white">JSON ↔ TOON Converter</h1>
+            <div class="flex items-center space-x-4">
+                <label for="sample-select" class="text-sm font-medium">Load Sample:</label>
+                <select id="sample-select" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-1 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select a sample...</option>
+                    <option value="simple">Simple Object</option>
+                    <option value="nested">Nested Data</option>
+                    <option value="arrays">Arrays</option>
+                    <option value="complex">Complex</option>
+                    <option value="toonError">TOON Parse Error</option>
+                    <option value="jsonError">JSON Parse Error</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 container mx-auto px-4 py-6 flex flex-col md:flex-row gap-4">
+
+        <!-- JSON Panel -->
+        <div class="flex-1 flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden border border-gray-700">
+            <div class="flex justify-between items-center bg-gray-700 border-b border-gray-600">
+                <h2 class="text-lg font-semibold px-4 py-3">JSON</h2>
+                <span id="json-count" class="px-4 py-3 text-sm text-gray-400 font-mono">0 tokens / 0 chars</span>
+            </div>
+            <textarea id="json-input"
+                class="flex-1 w-full p-4 bg-gray-900 text-gray-100 font-mono text-sm border-0 focus:ring-0"
+                spellcheck="false"
+                placeholder="Paste or type your JSON here..."></textarea>
+            <div class="p-3 bg-gray-700 border-t border-gray-600 flex space-x-2">
+                <button id="copy-json" class="btn btn-secondary text-sm">Copy</button>
+                <button id="download-json" class="btn btn-secondary text-sm">Download (.json)</button>
+                <button id="optimize-json" class="btn btn-green text-sm">Minify</button>
+            </div>
+        </div>
+
+        <!-- Conversion Controls -->
+        <div class="flex md:flex-col justify-center items-center gap-4 px-2">
+            <button id="to-toon-btn" title="Convert JSON to TOON" class="btn btn-primary w-16 h-12 flex justify-center items-center text-2xl">
+                →
+            </button>
+            <button id="to-json-btn" title="Convert TOON to JSON" class="btn btn-primary w-16 h-12 flex justify-center items-center text-2xl">
+                ←
+            </button>
+        </div>
+
+        <!-- TOON Panel -->
+        <div class="flex-1 flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden border border-gray-700">
+            <div class="flex justify-between items-center bg-gray-700 border-b border-gray-600">
+                <h2 class="text-lg font-semibold px-4 py-3">TOON</h2>
+                <span id="toon-count" class="px-4 py-3 text-sm text-gray-400 font-mono">0 tokens / 0 chars</span>
+            </div>
+            <textarea id="toon-input"
+                class="flex-1 w-full p-4 bg-gray-900 text-gray-100 font-mono text-sm border-0 focus:ring-0"
+                spellcheck="false"
+                placeholder="Paste or type your TOON here..."></textarea>
+            <div class="p-3 bg-gray-700 border-t border-gray-600 flex space-x-2">
+                <button id="copy-toon" class="btn btn-secondary text-sm">Copy</button>
+                <button id="download-toon" class="btn btn-secondary text-sm">Download (.toon)</button>
+                <button id="optimize-toon" class="btn btn-green text-sm">Minify</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Status/Error Bar -->
+    <footer id="status-bar" class="bg-gray-800 border-t border-gray-700 p-3 text-center font-mono text-sm">
+        <span class="text-green-400">Ready</span>
+    </footer>
+
+    <script>
+        // --- CONSTANTS & SAMPLES ---
+
+        const SAMPLES = {
+            simple: {
+                json: `{
+  "name": "John Doe",
+  "age": 30,
+  "isStudent": false,
+  "nickname": null
+}`,
+                toon: `(
+  name "John Doe"
+  age 30
+  isStudent false
+  nickname null
+)`
+            },
+            nested: {
+                json: `{
+  "user": {
+    "id": 123,
+    "name": "Alice",
+    "contact": {
+      "email": "alice@example.com",
+      "phone": "555-1234"
+    }
+  },
+  "status": "active"
+}`,
+                toon: `(
+  user (
+    id 123
+    name "Alice"
+    contact (
+      email "alice@example.com"
+      phone "555-1234"
+    )
+  )
+  status "active"
+)`
+            },
+            arrays: {
+                json: `{
+  "project": "Converter",
+  "tags": [
+    "json",
+    "toon",
+    "parser"
+  ],
+  "emptyArray": [],
+  "matrix": [
+    [1, 2],
+    [3, 4]
+  ]
+}`,
+                toon: `(
+  project "Converter"
+  tags [
+    "json"
+    "toon"
+    "parser"
+  ]
+  emptyArray []
+  matrix [
+    [
+      1
+      2
+    ]
+    [
+      3
+      4
+    ]
+  ]
+)`
+            },
+            complex: {
+                json: `{
+  "data": [
+    {
+      "id": "001",
+      "type": "donut",
+      "batters": {
+        "batter": [
+          { "id": "1001", "type": "Regular" },
+          { "id": "1002", "type": "Chocolate" }
+        ]
+      },
+      "topping": [
+        { "id": "5001", "type": "None" },
+        { "id": "5002", "type": "Glazed" }
+      ]
+    }
+  ],
+  "with-special-key": "hello"
+}`,
+                toon: `(
+  data [
+    (
+      id "001"
+      type "donut"
+      batters (
+        batter [
+          (
+            id "1001"
+            type "Regular"
+          )
+          (
+            id "1002"
+            type "Chocolate"
+          )
+        ]
+      )
+      topping [
+        (
+          id "5001"
+          type "None"
+        )
+        (
+          id "5002"
+          type "Glazed"
+        )
+      ]
+    )
+  ]
+  "with-special-key" "hello"
+)`
+            },
+            toonError: {
+                json: `{}`,
+                toon: `(
+  name "John Doe"
+  age 30
+  skills [
+    "JavaScript"
+    "Python"
+  ) // <-- Mismatched bracket
+)`
+            },
+            jsonError: {
+                json: `{
+  "name": "John Doe",
+  "age": 30,
+  "skills": [
+    "JavaScript"
+    "Python" // <-- Missing comma
+  ]
+}`,
+                toon: `()`
+            }
+        };
+
+        // --- DOM Elements ---
+        const jsonInput = document.getElementById('json-input');
+        const toonInput = document.getElementById('toon-input');
+        const toJsonBtn = document.getElementById('to-json-btn');
+        const toToonBtn = document.getElementById('to-toon-btn');
+        const copyJsonBtn = document.getElementById('copy-json');
+        const downloadJsonBtn = document.getElementById('download-json');
+        const copyToonBtn = document.getElementById('copy-toon');
+        const downloadToonBtn = document.getElementById('download-toon');
+        const sampleSelect = document.getElementById('sample-select');
+        const statusBar = document.getElementById('status-bar');
+        const optimizeJsonBtn = document.getElementById('optimize-json');
+        const optimizeToonBtn = document.getElementById('optimize-toon');
+        const jsonCount = document.getElementById('json-count');
+        const toonCount = document.getElementById('toon-count');
+
+        // --- ERROR HANDLING ---
+
+        /**
+         * Custom Error class for parsing TOON.
+         * Includes start/end indices for highlighting.
+         */
+        class ToonParseError extends Error {
+            constructor(message, start, end) {
+                super(message);
+                this.name = 'ToonParseError';
+                this.start = start;
+                this.end = end;
+            }
+        }
+
+        /**
+         * Displays a status message (success or error).
+         * @param {string} message - The message to display.
+         * @param {'success'|'error'} type - The type of message.
+         * @param {HTMLElement} [textarea] - The textarea to highlight.
+         * @param {number} [start] - Start index for highlighting.
+         * @param {number} [end] - End index for highlighting.
+         */
+        function showStatus(message, type, textarea = null, start = 0, end = 0) {
+            statusBar.textContent = message;
+            if (type === 'success') {
+                statusBar.className = 'bg-green-800 border-t border-green-700 p-3 text-center font-mono text-sm text-green-300';
+            } else {
+                statusBar.className = 'bg-red-800 border-t border-red-700 p-3 text-center font-mono text-sm text-red-300';
+                if (textarea) {
+                    textarea.focus();
+                    textarea.setSelectionRange(start, end);
+                }
+            }
+        }
+
+        /** Clears the status bar to 'Ready'. */
+        function clearStatus() {
+            showStatus('Ready', 'success');
+            // Clear selection from both textareas
+            [jsonInput, toonInput].forEach(area => {
+                if (document.activeElement === area) {
+                    const sel = area.selectionEnd;
+                    area.setSelectionRange(sel, sel);
+                }
+            });
+        }
+
+        // --- JSON -> TOON CONVERTER ---
+
+        /**
+         * Converts a JSON string to a TOON string.
+         * @param {string} jsonString - The input JSON string.
+         * @returns {string} The formatted TOON string.
+         * @throws {Error} If JSON parsing fails.
+         */
+        function jsonToToon(jsonString) {
+            let data;
+            try {
+                data = JSON.parse(jsonString);
+            } catch (e) {
+                // Try to find error location (crude)
+                const match = e.message.match(/position (\d+)/);
+                const pos = match ? parseInt(match[1], 10) : 0;
+                throw new ToonParseError(`JSON Parse Error: ${e.message}`, pos, pos + 1);
+            }
+            return formatToonValue(data, 0);
+        }
+
+        /**
+         * Recursively formats a JavaScript value into a TOON string.
+         * @param {*} value - The value to format.
+         * @param {number} indentLevel - The current indentation level.
+         * @returns {string} The formatted TOON part.
+         */
+        function formatToonValue(value, indentLevel) {
+            const indent = '  '.repeat(indentLevel);
+            const nextIndent = '  '.repeat(indentLevel + 1);
+
+            switch (typeof value) {
+                case 'string':
+                    return `"${value.replace(/[\\"]/g, '\\$&')}"`;
+                case 'number':
+                case 'boolean':
+                    return String(value);
+                case 'object':
+                    if (value === null) {
+                        return 'null';
+                    }
+                    if (Array.isArray(value)) {
+                        if (value.length === 0) return '[]';
+                        const items = value
+                            .map(item => formatToonValue(item, indentLevel + 1))
+                            .join(`\n${nextIndent}`);
+                        return `[\n${nextIndent}${items}\n${indent}]`;
+                    }
+                    // Regular object
+                    const entries = Object.entries(value);
+                    if (entries.length === 0) return '()';
+                    const pairs = entries
+                        .map(([key, val]) => {
+                            const formattedKey = formatToonAtom(key);
+                            const formattedValue = formatToonValue(val, indentLevel + 1);
+                            return `${formattedKey} ${formattedValue}`;
+                        })
+                        .join(`\n${nextIndent}`);
+                    return `(\n${nextIndent}${pairs}\n${indent})`;
+                default:
+                    return 'null'; // For undefined, etc.
+            }
+        }
+
+        /**
+         * Formats a key (string) as a TOON atom (quoted if necessary).
+         * @param {string} key - The key string.
+         * @returns {string} The formatted TOON atom.
+         */
+        function formatToonAtom(key) {
+            // Simple atom: no spaces, not a number, not true/false/null, no special chars
+            const atomRegex = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
+            if (atomRegex.test(key) && key !== 'true' && key !== 'false' && key !== 'null') {
+                return key;
+            }
+            // Must be quoted
+            return `"${key.replace(/[\\"]/g, '\\$&')}"`;
+        }
+        
+        /**
+         * Formats a JavaScript value into a compact, minified TOON string.
+         * @param {*} value - The value to format.
+         * @returns {string} The minified TOON part.
+         */
+        function formatToonValueCompact(value) {
+            switch (typeof value) {
+                case 'string':
+                    // Check if it can be an unquoted atom
+                    const atomRegex = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
+                    if (atomRegex.test(value) && value !== 'true' && value !== 'false' && value !== 'null') {
+                        return value; // "hello" -> hello
+                    }
+                    // All other strings must be quoted
+                    return `"${value.replace(/[\\"]/g, '\\$&')}"`; // "hello world" -> "hello world", "123" -> "123"
+                case 'number':
+                case 'boolean':
+                    return String(value);
+                case 'object':
+                    if (value === null) {
+                        return 'null';
+                    }
+                    if (Array.isArray(value)) {
+                        if (value.length === 0) return '[]';
+                        return `[${value.map(formatToonValueCompact).join(' ')}]`;
+                    }
+                    // Regular object
+                    const entries = Object.entries(value);
+                    if (entries.length === 0) return '()';
+                    const pairs = entries
+                        .map(([key, val]) => {
+                            // Use formatToonAtom for key, compact for value
+                            return `${formatToonAtom(key)} ${formatToonValueCompact(val)}`;
+                        })
+                        .join(' ');
+                    return `(${pairs})`;
+                default:
+                    return 'null'; // For undefined, etc.
+            }
+        }
+
+        // --- TOON -> JSON CONVERTER ---
+
+        /**
+         * Main TOON-to-JSON conversion function.
+         * @param {string} toonString - The input TOON string.
+         * @returns {any} The parsed JavaScript object.
+         * @throws {ToonParseError} If parsing fails.
+         */
+        function toonToJson(toonString) {
+            const tokens = tokenize(toonString);
+            const parser = new ToonParser(tokens);
+            const result = parser.parseValue();
+
+            if (!parser.isAtEnd()) {
+                const extraToken = parser.peek();
+                throw new ToonParseError(
+                    `Unexpected token '${extraToken.value}' after end of main expression.`,
+                    extraToken.start,
+                    extraToken.end
+                );
+            }
+            return result;
+        }
+
+        /**
+         * Tokenizes the TOON input string.
+         * @param {string} input - The TOON string.
+         * @returns {Array<object>} An array of token objects.
+         */
+        function tokenize(input) {
+            const tokens = [];
+            let cursor = 0;
+
+            while (cursor < input.length) {
+                let char = input[cursor];
+                const start = cursor;
+
+                // 1. Whitespace
+                if (/\s/.test(char)) {
+                    cursor++;
+                    continue;
+                }
+
+                // 2. Comments (extra feature: allow # comments)
+                if (char === '#') {
+                    while (cursor < input.length && input[cursor] !== '\n') {
+                        cursor++;
+                    }
+                    continue;
+                }
+
+                // 3. Single-char tokens
+                if (char === '(') {
+                    tokens.push({ type: 'LPAREN', value: '(', start, end: ++cursor });
+                    continue;
+                }
+                if (char === ')') {
+                    tokens.push({ type: 'RPAREN', value: ')', start, end: ++cursor });
+                    continue;
+                }
+                if (char === '[') {
+                    tokens.push({ type: 'LBRACKET', value: '[', start, end: ++cursor });
+                    continue;
+                }
+                if (char === ']') {
+                    tokens.push({ type: 'RBRACKET', value: ']', start, end: ++cursor });
+                    continue;
+                }
+
+                // 4. Strings
+                if (char === '"') {
+                    let value = '';
+                    cursor++; // Skip opening "
+                    while (input[cursor] !== '"') {
+                        if (cursor >= input.length) {
+                            throw new ToonParseError('Unterminated string', start, cursor);
+                        }
+                        if (input[cursor] === '\\') {
+                            cursor++;
+                            switch (input[cursor]) {
+                                case 'n': value += '\n'; break;
+                                case 't': value += '\t'; break;
+                                case '"': value += '"'; break;
+                                case '\\': value += '\\'; break;
+                                default: value += input[cursor]; // Allow escaping other chars
+                            }
+                        } else {
+                            value += input[cursor];
+                        }
+                        cursor++;
+                    }
+                    cursor++; // Skip closing "
+                    tokens.push({ type: 'STRING', value, start, end: cursor });
+                    continue;
+                }
+
+                // 5. Atoms (numbers, booleans, null, unquoted strings)
+                const atomRegex = /[^\s()\[\]"]/;
+                if (atomRegex.test(char)) {
+                    let value = '';
+                    while (cursor < input.length && atomRegex.test(input[cursor])) {
+                        value += input[cursor];
+                        cursor++;
+                    }
+                    tokens.push({ type: 'ATOM', value, start, end: cursor });
+                    continue;
+                }
+
+                // 6. Unknown
+                throw new ToonParseError(`Unexpected character: '${char}'`, start, start + 1);
+            }
+
+            tokens.push({ type: 'EOF', value: '', start: cursor, end: cursor });
+            return tokens;
+        }
+
+        /**
+         * A recursive-descent parser for TOON tokens.
+         */
+        class ToonParser {
+            constructor(tokens) {
+                this.tokens = tokens;
+                this.current = 0;
+            }
+
+            isAtEnd() {
+                return this.peek().type === 'EOF';
+            }
+
+            peek() {
+                return this.tokens[this.current];
+            }
+
+            previous() {
+                return this.tokens[this.current - 1];
+            }
+
+            advance() {
+                if (!this.isAtEnd()) this.current++;
+                return this.previous();
+            }
+
+            check(type) {
+                if (this.isAtEnd()) return false;
+                return this.peek().type === type;
+            }
+
+            match(type) {
+                if (this.check(type)) {
+                    this.advance();
+                    return true;
+                }
+                return false;
+            }
+
+            consume(type, message) {
+                if (this.check(type)) return this.advance();
+                const token = this.peek();
+                throw new ToonParseError(message, token.start, token.end);
+            }
+
+            parseValue() {
+                const token = this.peek();
+                switch (token.type) {
+                    case 'LPAREN':
+                        return this.parseObject();
+                    case 'LBRACKET':
+                        return this.parseArray();
+                    case 'STRING':
+                        return this.advance().value;
+                    case 'ATOM':
+                        return this.parseAtom();
+                    default:
+                        throw new ToonParseError(
+                            `Unexpected token '${token.value}'. Expected a value (object, array, string, or atom).`,
+                            token.start,
+                            token.end
+                        );
+                }
+            }
+
+            parseObject() {
+                this.consume('LPAREN', "Expected '(' to start an object.");
+                const obj = {};
+                while (!this.check('RPAREN') && !this.isAtEnd()) {
+                    // Parse key
+                    const keyToken = this.peek();
+                    let key;
+                    if (this.match('ATOM')) {
+                        key = keyToken.value;
+                    } else if (this.match('STRING')) {
+                        key = keyToken.value;
+                    } else {
+                        throw new ToonParseError(
+                            `Expected an ATOM or STRING for object key, but got ${keyToken.type}.`,
+                            keyToken.start,
+                            keyToken.end
+                        );
+                    }
+
+                    // Parse value
+                    try {
+                        const value = this.parseValue();
+                        obj[key] = value;
+                    } catch (e) {
+                        if (e instanceof ToonParseError) {
+                            throw new ToonParseError(
+                                `Missing value for key "${key}". ${e.message}`,
+                                e.start,
+                                e.end
+                            );
+                        }
+                        throw e; // re-throw
+                    }
+                }
+                this.consume('RPAREN', "Expected ')' to close the object.");
+                return obj;
+            }
+
+            parseArray() {
+                this.consume('LBRACKET', "Expected '[' to start an array.");
+                const arr = [];
+                while (!this.check('RBRACKET') && !this.isAtEnd()) {
+                    arr.push(this.parseValue());
+                }
+                this.consume('RBRACKET', "Expected ']' to close the array.");
+                return arr;
+            }
+
+            parseAtom() {
+                const token = this.advance();
+                const { value } = token;
+
+                if (value === 'true') return true;
+                if (value === 'false') return false;
+                if (value === 'null') return null;
+
+                const num = Number(value);
+                // Check if it's a valid number and not just parsed as one (e.g., "123foo" is not a valid atom)
+                if (!isNaN(num) && String(num) === value) {
+                    return num;
+                }
+
+                // It's just an unquoted string
+                return value;
+            }
+        }
+
+        // --- UTILITY FUNCTIONS ---
+
+        /**
+         * Copies text to the clipboard.
+         * @param {string} text - The text to copy.
+         * @param {string} name - Name of the content (e.g., "JSON")
+         */
+        function copyToClipboard(text, name) {
+            // Use modern clipboard API if available, with fallback
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text)
+                    .then(() => showStatus(`${name} copied to clipboard!`, 'success'))
+                    .catch(err => copyToClipboardFallback(text, name));
+            } else {
+                copyToPClipboardFallback(text, name);
+            }
+        }
+
+        /** Fallback for copying to clipboard */
+        function copyToClipboardFallback(text, name) {
+             const textArea = document.createElement("textarea");
+             textArea.value = text;
+             textArea.style.position = "absolute";
+             textArea.style.left = "-9999px";
+             document.body.appendChild(textArea);
+             textArea.select();
+             try {
+                document.execCommand('copy');
+                showStatus(`${name} copied to clipboard!`, 'success');
+             } catch (err) {
+                showStatus(`Failed to copy ${name}.`, 'error');
+             }
+             document.body.removeChild(textArea);
+        }
+
+        /**
+         * Triggers a file download.
+         * @param {string} filename - The desired filename.
+         * @param {string} text - The content of the file.
+         */
+        function downloadFile(filename, text) {
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+            showStatus(`Downloaded ${filename}`, 'success');
+        }
+
+        /**
+         * Tokenizes a JSON string for counting.
+         * Very basic, not a full parser.
+         * @param {string} input - The JSON string.
+         * @returns {number} The number of tokens, or -1 on failure.
+         */
+        function countJsonTokens(input) {
+            if (input.trim() === "") return 0;
+
+            let count = 0;
+            let cursor = 0;
+
+            try {
+                while (cursor < input.length) {
+                    let char = input[cursor];
+
+                    // 1. Whitespace
+                    if (/\s/.test(char)) {
+                        cursor++;
+                        continue;
+                    }
+
+                    // 2. Single-char tokens
+                    if (char === '{' || char === '}' || char === '[' || char === ']' || char === ':' || char === ',') {
+                        count++;
+                        cursor++;
+                        continue;
+                    }
+
+                    // 3. Strings
+                    if (char === '"') {
+                        count++; // Count the string as one token
+                        cursor++; // Skip opening "
+                        while (input[cursor] !== '"') {
+                            if (cursor >= input.length) throw new Error("Unterminated string");
+                            if (input[cursor] === '\\') {
+                                cursor++; // Skip escaped char
+                                if (cursor >= input.pre.length) throw new Error("Unterminated string");
+                            }
+                            cursor++;
+                        }
+                        cursor++; // Skip closing "
+                        continue;
+                    }
+
+                    // 4. Numbers, true, false, null
+                    const numOrLiteral = /^-?\d+(\.\d+)?([eE][+-]?\d+)?|^true|^false|^null/;
+                    const remaining = input.substring(cursor);
+                    const match = remaining.match(numOrLiteral);
+
+                    if (match && match.index === 0) {
+                        count++;
+                        cursor += match[0].length;
+                        continue;
+                    }
+
+                    // If we're here, it's an invalid char
+                    throw new Error("Invalid character");
+                }
+            } catch (e) {
+                return -1; // Indicate failure
+            }
+            return count;
+        }
+
+        /**
+         * Updates the char/token counts below headers.
+         */
+        function updateCounts() {
+            // JSON Count
+            const jsonLen = jsonInput.value.length;
+            const jsonTokenCount = countJsonTokens(jsonInput.value);
+            if (jsonTokenCount === -1) {
+                jsonCount.textContent = `Invalid / ${jsonLen} chars`;
+            } else {
+                jsonCount.textContent = `${jsonTokenCount} tokens / ${jsonLen} chars`;
+            }
+
+            // TOON Count
+            const toonLen = toonInput.value.length;
+            try {
+                // We tokenize to get the count
+                const tokens = tokenize(toonInput.value);
+                // -1 to exclude the automatic EOF token
+                toonCount.textContent = `${tokens.length - 1} tokens / ${toonLen} chars`;
+            } catch (e) {
+                // Handle incomplete/invalid TOON during typing
+                toonCount.textContent = `Invalid / ${toonLen} chars`;
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize counts on load
+            updateCounts();
+
+            // JSON -> TOON
+            toToonBtn.addEventListener('click', () => {
+                clearStatus();
+                try {
+                    const toon = jsonToToon(jsonInput.value);
+                    toonInput.value = toon;
+                    showStatus('Converted JSON to TOON!', 'success');
+                    updateCounts();
+                } catch (e) {
+                    if (e instanceof ToonParseError) {
+                        showStatus(e.message, 'error', jsonInput, e.start, e.end);
+                    } else {
+                        showStatus(`Error: ${e.message}`, 'error');
+                    }
+                }
+            });
+
+            // TOON -> JSON
+            toJsonBtn.addEventListener('click', () => {
+                clearStatus();
+                try {
+                    const json = toonToJson(toonInput.value);
+                    jsonInput.value = JSON.stringify(json, null, 2); // Pretty-print
+                    showStatus('Converted TOON to JSON!', 'success');
+                    updateCounts();
+                } catch (e) {
+                    if (e instanceof ToonParseError) {
+                        showStatus(e.message, 'error', toonInput, e.start, e.end);
+                    } else {
+                        showStatus(`Error: ${e.message}`, 'error');
+                    }
+                }
+            });
+
+            // Sample Loader
+            sampleSelect.addEventListener('change', () => {
+                const sampleKey = sampleSelect.value;
+                if (sampleKey && SAMPLES[sampleKey]) {
+                    clearStatus();
+                    const sample = SAMPLES[sampleKey];
+                    jsonInput.value = sample.json;
+                    toonInput.value = sample.toon;
+                    updateCounts();
+                }
+            });
+
+            // Utility Buttons
+            copyJsonBtn.addEventListener('click', () => copyToClipboard(jsonInput.value, 'JSON'));
+            downloadJsonBtn.addEventListener('click', () => downloadFile('data.json', jsonInput.value));
+            copyToonBtn.addEventListener('click', () => copyToClipboard(toonInput.value, 'TOON'));
+            downloadToonBtn.addEventListener('click', () => downloadFile('data.toon', toonInput.value));
+
+            // Optimize/Minify Buttons
+            optimizeJsonBtn.addEventListener('click', () => {
+                clearStatus();
+                try {
+                    const data = JSON.parse(jsonInput.value);
+                    jsonInput.value = JSON.stringify(data); // No args = minified
+                    updateCounts();
+                    showStatus('JSON minified!', 'success');
+                } catch (e) {
+                    const pos = e.message.match(/position (\d+)/);
+                    const start = pos ? parseInt(pos[1], 10) : 0;
+                    showStatus(`JSON Parse Error: ${e.message}`, 'error', jsonInput, start, start + 1);
+                }
+            });
+
+            optimizeToonBtn.addEventListener('click', () => {
+                clearStatus();
+                try {
+                    const json = toonToJson(toonInput.value);
+                    toonInput.value = formatToonValueCompact(json);
+                    updateCounts();
+                    showStatus('TOON minified!', 'success');
+                } catch (e) {
+                    if (e instanceof ToonParseError) {
+                        showStatus(e.message, 'error', toonInput, e.start, e.end);
+                    } else {
+                        showStatus(`Error: ${e.message}`, 'error');
+                    }
+                }
+            });
+
+            // Clear status on input and update counts
+            jsonInput.addEventListener('input', () => {
+                clearStatus();
+                updateCounts();
+            });
+            toonInput.addEventListener('input', () => {
+                clearStatus();
+                updateCounts();
+            });
+        });
+    </script>
+</body>
+</html>
